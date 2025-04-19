@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get Droplets</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid black;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <h1>DigitalOcean Droplets</h1>
+  <label for="api-token">Enter API Token:</label>
+  <input type="text" id="api-token" placeholder="API Token">
+  <button id="get-droplets">Get Droplets</button>
+  <table id="droplets-table">
+    <thead>
+      <tr>
+        <th style="width: 10px;">No</th>
+        <th>Name</th>
+        <th>IP Address</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Droplets will be added here dynamically -->
+    </tbody>
+  </table>
+
+  <script>
+    async function getDroplets(apiToken) {
+      try {
+        const { data } = await axios({
+          url: 'https://api.digitalocean.com/v2/droplets',
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            'Content-Type': 'application/json',
+          },
+          method: 'GET',
+        });
+        return data.droplets;
+      } catch (error) {
+        console.error('Error fetching droplets:', error);
+        alert('Failed to fetch droplets. Check the console for details.');
+        return [];
+      }
+    }
+
+    async function rebootDroplet(apiToken, dropletId) {
+      try {
+        await axios.post('https://api.digitalocean.com/v2/droplets/' + dropletId + '/actions', 
+		{
+			type: 'reboot',
+		},
+		{
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        alert(`Droplet ${dropletId} rebooting.`);
+      } catch (error) {
+        console.error('Error rebooting droplet:', error);
+        alert('Failed to rebooting droplet. Check the console for details.');
+      }
+    }
+
+    async function rebuildDroplet(apiToken, dropletId) {
+      try {
+        await axios.post('https://api.digitalocean.com/v2/droplets/' + dropletId + '/actions', 
+		{
+			type: 'rebuild',
+			image: 'ubuntu-20-04-x64'
+		},
+		{
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        alert(`Droplet ${dropletId} rebuilt successfully.`);
+      } catch (error) {
+        console.error('Error rebuilding droplet:', error);
+        alert('Failed to rebuild droplet. Check the console for details.');
+      }
+    }
+
+    async function deleteDroplet(apiToken, dropletId) {
+      try {
+        await axios.delete('https://api.digitalocean.com/v2/droplets/' + dropletId, {
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        alert(`Droplet ${dropletId} rebuilt successfully.`);
+      } catch (error) {
+        console.error('Error deleting droplet:', error);
+        alert('Failed to delete droplet. Check the console for details.');
+      }
+    }
+
+    document.getElementById('get-droplets').addEventListener('click', async () => {
+      const apiToken = document.getElementById('api-token').value;
+      if (!apiToken) {
+        alert('Please enter an API token.');
+        return;
+      }
+
+      const droplets = await getDroplets(apiToken);
+      const tableBody = document.querySelector('#droplets-table tbody');
+      tableBody.innerHTML = '';
+
+      droplets.forEach((droplet, index) => {
+		if(droplet.status != 'active') return
+        const row = document.createElement('tr');
+
+		const indexCell = document.createElement('td');
+		indexCell.textContent = index + 1; // Starts at 1
+		row.appendChild(indexCell);
+		
+        const nameCell = document.createElement('td');
+        nameCell.textContent = droplet.name;
+        row.appendChild(nameCell);
+
+        const ipCell = document.createElement('td');
+        const ip = droplet.networks.v4.find(type => type.type === "public")?.ip_address ?? 'N/A';
+        ipCell.textContent = ip;
+        row.appendChild(ipCell);
+		
+		const copyButton = document.createElement("button");
+		copyButton.innerHTML = "📋"; // Copy icon
+		copyButton.style.cursor = "pointer";
+		copyButton.style.border = "none";
+		copyButton.style.background = "none";
+		copyButton.style.marginLeft = "8px"; // Space between IP and button
+
+		// Copy function
+		copyButton.addEventListener("click", () => {
+			navigator.clipboard.writeText(ip).then(() => {
+			
+			}).catch(err => {
+				console.error("Failed to copy: ", err);
+			});
+		});
+
+		// Append IP and button together inside the same <td>
+		ipCell.appendChild(copyButton);
+		row.appendChild(ipCell);
+		
+        const actionCell = document.createElement('td');
+		
+        const rebootButton = document.createElement('button');
+		rebootButton.style.marginRight = '10px';
+        rebootButton.textContent = 'Reboot';
+        rebootButton.addEventListener('click', async () => {
+          if (confirm(`Are you sure you want to rebuild droplet ${droplet.name} at ${ip} ?`)) {
+            await rebootDroplet(apiToken, droplet.id);
+            row.remove();
+          }
+        });
+        actionCell.appendChild(rebootButton);
+		
+        const rebuildButton = document.createElement('button');
+		rebuildButton.style.marginRight = '10px';
+        rebuildButton.textContent = 'Rebuild';
+        rebuildButton.addEventListener('click', async () => {
+          if (confirm(`Are you sure you want to rebuild droplet ${droplet.name} at ${ip} ?`)) {
+            await rebuildDroplet(apiToken, droplet.id);
+            row.remove();
+          }
+        });
+        actionCell.appendChild(rebuildButton);
+		
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Delete';
+        deleteButton.addEventListener('click', async () => {
+          if (confirm(`Are you sure you want to delete droplet ${droplet.name} at ${ip} ?`)) {
+            await deleteDroplet(apiToken, droplet.id);
+            row.remove();
+          }
+        });
+        actionCell.appendChild(deleteButton);
+        row.appendChild(actionCell);
+
+        tableBody.appendChild(row);
+      });
+    });
+  </script>
+</body>
+</html>
